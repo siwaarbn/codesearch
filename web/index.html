@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>codesearch</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+    <style>
+        * { font-family: 'SF Mono', ui-monospace, 'Cascadia Code', monospace; }
+        h1, .sans { font-family: system-ui, -apple-system, sans-serif; }
+        .hljs { background: transparent !important; padding: 0 !important; }
+        #drop-zone.drag-over { border-color: #3b82f6; background: rgba(59,130,246,.04); }
+        .spin { animation: spin .8s linear infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        pre { tab-size: 2; }
+    </style>
+</head>
+<body class="bg-[#0d1117] text-gray-300 min-h-screen">
+
+<div class="max-w-2xl mx-auto px-5 py-14">
+
+    <!-- header -->
+    <div class="mb-14">
+        <h1 class="sans text-xl font-semibold text-white mb-1 tracking-tight">codesearch</h1>
+        <p class="text-sm text-gray-600">find functions by what they do, not what they&rsquo;re called</p>
+    </div>
+
+    <!-- upload section -->
+    <div id="s-upload">
+        <input type="file" id="file-input" class="hidden" accept=".zip">
+
+        <div id="drop-zone"
+             class="border-2 border-dashed border-gray-800 rounded-xl p-14 text-center cursor-pointer transition-all hover:border-gray-700"
+             onclick="document.getElementById('file-input').click()">
+            <svg class="w-7 h-7 mx-auto mb-4 text-gray-700" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+                <path stroke-linecap="round" stroke-linejoin="round"
+                      d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5"/>
+            </svg>
+            <p class="text-sm text-gray-400 mb-1">drop a zip of your codebase here</p>
+            <p class="text-xs text-gray-700">or click to browse &middot; .py and .js files will be indexed</p>
+        </div>
+
+        <div class="flex items-center gap-3 my-5">
+            <div class="flex-1 h-px bg-gray-800"></div>
+            <span class="text-xs text-gray-700">or</span>
+            <div class="flex-1 h-px bg-gray-800"></div>
+        </div>
+
+        <button onclick="loadDemo()"
+                class="w-full py-3 text-sm text-gray-500 hover:text-gray-300 bg-gray-900 hover:bg-gray-800 border border-gray-800 hover:border-gray-700 rounded-lg transition-all">
+            try the demo &rarr; search the codesearch source code
+        </button>
+    </div>
+
+    <!-- loading / status -->
+    <div id="s-status" class="hidden text-center py-12">
+        <div class="w-5 h-5 mx-auto mb-3 border-2 border-gray-800 border-t-blue-500 rounded-full spin"></div>
+        <div id="s-status-text" class="text-sm text-gray-600"></div>
+    </div>
+
+    <!-- search section -->
+    <div id="s-search" class="hidden">
+        <div id="session-info" class="text-xs text-gray-700 mb-4"></div>
+
+        <div id="suggestions" class="flex flex-wrap gap-2 mb-5"></div>
+
+        <div class="flex gap-2 mb-8">
+            <input id="query-input" type="text"
+                   placeholder="what does this function do..."
+                   class="flex-1 bg-gray-900 border border-gray-800 focus:border-gray-600 rounded-lg px-4 py-2.5 text-sm text-gray-200 placeholder-gray-700 outline-none transition-colors"
+                   onkeydown="if(event.key==='Enter') doSearch()">
+            <button onclick="doSearch()"
+                    class="px-5 py-2.5 bg-blue-600 hover:bg-blue-500 active:bg-blue-700 rounded-lg text-sm text-white font-medium transition-colors">
+                search
+            </button>
+        </div>
+    </div>
+
+    <!-- results -->
+    <div id="s-results"></div>
+
+</div>
+
+<script>
+let sid = null;
+
+// --- drag & drop wiring ---
+const zone = document.getElementById('drop-zone');
+zone.addEventListener('dragover',  e => { e.preventDefault(); zone.classList.add('drag-over'); });
+zone.addEventListener('dragleave', () => zone.classList.remove('drag-over'));
+zone.addEventListener('drop', e => {
+    e.preventDefault();
+    zone.classList.remove('drag-over');
+    const f = e.dataTransfer.files[0];
+    if (f) handleFile(f);
+});
+document.getElementById('file-input').addEventListener('change', e => {
+    if (e.target.files[0]) handleFile(e.target.files[0]);
+});
+
+// --- upload ---
+async function handleFile(file) {
+    if (!file.name.endsWith('.zip')) { flashError('needs to be a .zip file'); return; }
+    showLoading('indexing your code\u2026');
+    const fd = new FormData();
+    fd.append('file', file);
+    try {
+        const r = await fetch('/index', { method: 'POST', body: fd });
+        const d = await r.json();
+        if (!r.ok) { showUploadError(d.detail || 'indexing failed'); return; }
+        enterSearchMode(d.session_id, d.num_chunks, false);
+    } catch {
+        showUploadError('server error — try again');
+    }
+}
+
+// --- demo ---
+async function loadDemo() {
+    showLoading('loading demo\u2026');
+    try {
+        const r = await fetch('/demo');
+        const d = await r.json();
+        if (!r.ok) { showUploadError(d.detail || 'demo unavailable'); return; }
+        enterSearchMode(d.session_id, d.num_chunks, true);
+    } catch {
+        showUploadError('could not load demo');
+    }
+}
+
+// --- state transitions ---
+function showLoading(msg) {
+    el('s-upload').classList.add('hidden');
+    el('s-status').classList.remove('hidden');
+    el('s-status-text').textContent = msg;
+}
+
+function showUploadError(msg) {
+    el('s-upload').classList.remove('hidden');
+    el('s-status').classList.add('hidden');
+    el('s-results').innerHTML = err(msg);
+}
+
+function flashError(msg) {
+    el('s-results').innerHTML = err(msg);
+}
+
+function enterSearchMode(sessionId, numChunks, isDemo) {
+    sid = sessionId;
+    el('s-upload').classList.add('hidden');
+    el('s-status').classList.add('hidden');
+    el('s-search').classList.remove('hidden');
+    el('session-info').textContent = `${numChunks} functions and classes indexed`;
+
+    const chips = isDemo
+        ? ['parse python file', 'build faiss index', 'embed code chunks', 'walk directory tree', 'load index from disk']
+        : ['parse and extract', 'handle errors', 'read file', 'find function', 'save to disk'];
+
+    el('suggestions').innerHTML =
+        '<span class="text-xs text-gray-700 self-center mr-1">try:</span>' +
+        chips.map(q =>
+            `<button onclick="searchFor('${q}')"
+                     class="text-xs px-3 py-1 bg-gray-900 hover:bg-gray-800 border border-gray-800 rounded-full text-gray-600 hover:text-gray-300 transition-colors">
+                ${q}
+            </button>`
+        ).join('');
+
+    el('query-input').focus();
+}
+
+function searchFor(q) {
+    el('query-input').value = q;
+    doSearch();
+}
+
+// --- search ---
+async function doSearch() {
+    const q = el('query-input').value.trim();
+    if (!q || !sid) return;
+
+    el('s-results').innerHTML =
+        '<div class="flex items-center gap-2.5 py-8 text-sm text-gray-700">' +
+        '<div class="w-4 h-4 border-2 border-gray-800 border-t-blue-500 rounded-full spin shrink-0"></div>' +
+        'searching\u2026</div>';
+
+    try {
+        const r = await fetch('/search', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ session_id: sid, query: q, top_k: 5 }),
+        });
+        const d = await r.json();
+
+        if (!r.ok) {
+            if (r.status === 404) {
+                // session gone (server restarted) — bounce back to upload
+                el('s-search').classList.add('hidden');
+                el('s-upload').classList.remove('hidden');
+                el('s-results').innerHTML = err('session expired \u2014 please re-upload');
+                return;
+            }
+            el('s-results').innerHTML = err(d.detail || 'search failed');
+            return;
+        }
+
+        renderResults(d.results);
+    } catch {
+        el('s-results').innerHTML = err('request failed');
+    }
+}
+
+// --- render results ---
+function renderResults(results) {
+    if (!results.length) {
+        el('s-results').innerHTML = '<p class="text-gray-700 text-sm text-center py-10">no results</p>';
+        return;
+    }
+    el('s-results').innerHTML = results.map(resultCard).join('');
+    el('s-results').querySelectorAll('pre code').forEach(b => hljs.highlightElement(b));
+}
+
+function resultCard(r) {
+    const py     = r.language === 'python';
+    const badge  = py
+        ? 'border-blue-900/60 text-blue-400 bg-blue-950/30'
+        : 'border-amber-900/60 text-amber-400 bg-amber-950/30';
+    // only show the last 3 path segments so it doesn't overflow
+    const short  = r.path.split('/').slice(-3).join('/');
+
+    return `
+<div class="border border-gray-800 rounded-xl overflow-hidden mb-3 hover:border-gray-700/80 transition-colors">
+    <div class="flex items-center justify-between gap-4 px-4 py-2.5 bg-gray-900/50">
+        <div class="flex items-center gap-2.5 min-w-0">
+            <span class="shrink-0 text-[10px] font-semibold px-1.5 py-px rounded border ${badge}">${r.language}</span>
+            <span class="text-white text-sm font-semibold truncate">${esc(r.name)}</span>
+        </div>
+        <span class="shrink-0 text-gray-600 text-xs" title="${esc(r.path)}">${esc(short)}:${r.start_line}</span>
+    </div>
+    <pre class="m-0 overflow-x-auto" style="background:#0d1117"><code class="language-${r.language} text-xs leading-relaxed block px-4 py-3">${esc(r.preview)}</code></pre>
+    <div class="px-4 py-1.5 bg-gray-900/30 border-t border-gray-800/50 flex justify-end">
+        <span class="text-gray-700 text-xs">${r.score.toFixed(4)}</span>
+    </div>
+</div>`;
+}
+
+// --- tiny helpers ---
+const el  = id => document.getElementById(id);
+const esc = s  => String(s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+const err = msg => `<p class="text-red-400/80 text-sm py-4">${esc(msg)}</p>`;
+</script>
+</body>
+</html>
