@@ -26,8 +26,8 @@ from codesearch.search import search as _search
 # paths
 # -------------------------------------------------------------------
 
-_HERE = Path(__file__).parent
-_REPO_ROOT = _HERE.parents[1]  # src/codesearch -> src -> project root
+_HERE = Path(__file__).resolve().parent        # absolute path to src/codesearch/
+_REPO_ROOT = _HERE.parents[1]                 # src/codesearch -> src -> project root
 WEB_DIR = _REPO_ROOT / "web"
 
 # -------------------------------------------------------------------
@@ -57,16 +57,16 @@ def _register_session(sid: str, path: Path) -> None:
 
 def _build_demo() -> None:
     # index the codesearch source itself so visitors can try without uploading
+    # _HERE is the resolved absolute path to this file's directory, so this
+    # works regardless of the cwd the server was launched from
     try:
-        src = _REPO_ROOT / "src"
-        if not src.exists():
-            return
+        src = _HERE  # src/codesearch/ — the package directory itself
         chunks = parse_directory(src, languages=["python"])
         if not chunks:
             return
         for c in chunks:
             try:
-                c.path = str(Path(c.path).relative_to(_REPO_ROOT))
+                c.path = str(Path(c.path).relative_to(_HERE.parent))
             except ValueError:
                 pass
         embs = _embedder().embed_chunks(chunks)
