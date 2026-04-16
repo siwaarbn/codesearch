@@ -1,0 +1,26 @@
+[project]
+name = "codesearch"
+version = "0.1.0"
+description = "Semantic code search CLI using tree-sitter and sentence-transformers"
+readme = "README.md"
+authors = [
+    { name = "siwaarbn", email = "siwaarbn@users.noreply.github.com" }
+]
+requires-python = ">=3.11"
+dependencies = [
+    "click>=8.3.2",
+    "faiss-cpu>=1.13.2",
+    "rich>=15.0.0",
+    "sentence-transformers>=5.4.1",
+    "tree-sitter>=0.25.2",
+    "tree-sitter-javascript>=0.25.0",
+    "tree-sitter-python>=0.25.0",
+    "watchdog>=6.0.0",
+]
+
+[project.scripts]
+codesearch = "codesearch:main"
+
+[build-system]
+requires = ["uv_build>=0.8.17,<0.9.0"]
+build-backend = "uv_build"
