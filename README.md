@@ -2,7 +2,7 @@
 
 > find functions by what they *do*, not what they're *called*
 
-![Demo](demo.gif)
+![codesearch screenshot](screenshot.png)
 
 *(I'll record a proper demo gif at some point)*
 
