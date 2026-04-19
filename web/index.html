@@ -118,7 +118,7 @@ async function handleFile(file) {
 
 // --- demo ---
 async function loadDemo() {
-    showLoading('loading demo\u2026');
+    showLoading('building demo index\u2026 (first run may take a moment)');
     try {
         const r = await fetch('/demo');
         const d = await r.json();

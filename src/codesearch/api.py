@@ -59,28 +59,30 @@ def _build_demo() -> None:
     # index the codesearch source itself so visitors can try without uploading
     # _HERE is the resolved absolute path to this file's directory, so this
     # works regardless of the cwd the server was launched from
-    try:
-        src = _HERE  # src/codesearch/ — the package directory itself
-        chunks = parse_directory(src, languages=["python"])
-        if not chunks:
-            return
-        for c in chunks:
-            try:
-                c.path = str(Path(c.path).relative_to(_HERE.parent))
-            except ValueError:
-                pass
-        embs = _embedder().embed_chunks(chunks)
-        d = Path(tempfile.mkdtemp(prefix="cs_demo_"))
-        save_index(build_index(embs), chunks, d)
-        _sessions[_DEMO_ID] = d
-        print(f"demo index built: {len(chunks)} chunks")
-    except Exception as e:
-        print(f"warning: demo build failed: {e}")
+    src = _HERE  # src/codesearch/ — the package directory itself
+    chunks = parse_directory(src, languages=["python"])
+    if not chunks:
+        raise RuntimeError("no python files found in package source")
+    for c in chunks:
+        try:
+            c.path = str(Path(c.path).relative_to(_HERE.parent))
+        except ValueError:
+            pass
+    embs = _embedder().embed_chunks(chunks)
+    d = Path(tempfile.mkdtemp(prefix="cs_demo_"))
+    save_index(build_index(embs), chunks, d)
+    _sessions[_DEMO_ID] = d
+    print(f"demo index built: {len(chunks)} chunks")
 
 
 @asynccontextmanager
 async def _lifespan(app: FastAPI):
-    _build_demo()
+    # try to build demo eagerly so it's ready on first request
+    # if it fails (e.g. model not cached yet) it will be retried lazily
+    try:
+        _build_demo()
+    except Exception as e:
+        print(f"warning: demo build failed at startup, will retry on first request: {e}")
     yield
     for p in _sessions.values():
         shutil.rmtree(p, ignore_errors=True)
@@ -140,7 +142,11 @@ def root():
 @app.get("/demo", response_model=SessionInfo)
 def demo():
     if _DEMO_ID not in _sessions:
-        raise HTTPException(503, "demo index isn't ready yet, try again in a moment")
+        # startup build failed — try now so the user isn't permanently locked out
+        try:
+            _build_demo()
+        except Exception as e:
+            raise HTTPException(503, f"demo unavailable: {e}")
     _, chunks = load_index(_sessions[_DEMO_ID])
     return SessionInfo(session_id=_DEMO_ID, num_chunks=len(chunks))
 
