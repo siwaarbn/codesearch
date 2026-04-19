@@ -2,7 +2,7 @@
 
 > find functions by what they *do*, not what they're *called*
 
-![codesearch web UI — upload zone and demo button](screenshot.png)
+![codesearch web UI — search results showing indexed functions with syntax-highlighted previews and similarity scores](screenshot.png)
 
 ## Why I built this
 
