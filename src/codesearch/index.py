@@ -40,14 +40,14 @@ def save_index(index: faiss.IndexFlatIP, chunks: list[CodeChunk], directory: str
             for c in chunks
         ]
     }
-    (directory / _META_FILE).write_text(json.dumps(meta, indent=2, ensure_ascii=False))
+    (directory / _META_FILE).write_text(json.dumps(meta, indent=2, ensure_ascii=False), encoding="utf-8")
 
 
 def load_index(directory: str | Path) -> tuple[faiss.IndexFlatIP, list[CodeChunk]]:
     directory = Path(directory)
     index = faiss.read_index(str(directory / _INDEX_FILE))
     # TODO: probably should validate this json before blindly deserializing it
-    data = json.loads((directory / _META_FILE).read_text())
+    data = json.loads((directory / _META_FILE).read_text(encoding="utf-8"))
     chunks = [
         CodeChunk(
             name=c["name"],
@@ -67,7 +67,7 @@ def indexed_paths(directory: str | Path) -> set[str]:
     meta_file = Path(directory) / _META_FILE
     if not meta_file.exists():
         return set()
-    data = json.loads(meta_file.read_text())
+    data = json.loads(meta_file.read_text(encoding="utf-8"))
     return {c["path"] for c in data["chunks"]}
 
 
