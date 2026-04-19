@@ -39,6 +39,7 @@ _DEMO_ID = "demo"
 _MAX_SESSIONS = 50  # evict oldest when we go over this
 _SAFE_EXTS = frozenset({".py", ".js", ".jsx", ".mjs"})
 _MAX_ZIP_BYTES = 50 * 1024 * 1024  # 50mb should be plenty
+_demo_error: str | None = None  # set when _build_demo() fails, cleared on success
 
 
 @lru_cache(maxsize=1)
@@ -59,20 +60,27 @@ def _build_demo() -> None:
     # index the codesearch source itself so visitors can try without uploading
     # _HERE is the resolved absolute path to this file's directory, so this
     # works regardless of the cwd the server was launched from
-    src = _HERE  # src/codesearch/ — the package directory itself
-    chunks = parse_directory(src, languages=["python"])
-    if not chunks:
-        raise RuntimeError("no python files found in package source")
-    for c in chunks:
-        try:
-            c.path = str(Path(c.path).relative_to(_HERE.parent))
-        except ValueError:
-            pass
-    embs = _embedder().embed_chunks(chunks)
-    d = Path(tempfile.mkdtemp(prefix="cs_demo_"))
-    save_index(build_index(embs), chunks, d)
-    _sessions[_DEMO_ID] = d
-    print(f"demo index built: {len(chunks)} chunks")
+    global _demo_error
+    try:
+        src = _HERE  # src/codesearch/ — the package directory itself
+        chunks = parse_directory(src, languages=["python"])
+        if not chunks:
+            raise RuntimeError("no python files found in package source")
+        for c in chunks:
+            try:
+                c.path = str(Path(c.path).relative_to(_HERE.parent))
+            except ValueError:
+                pass
+        embs = _embedder().embed_chunks(chunks)
+        d = Path(tempfile.mkdtemp(prefix="cs_demo_"))
+        save_index(build_index(embs), chunks, d)
+        _sessions[_DEMO_ID] = d
+        _demo_error = None
+        print(f"demo index built: {len(chunks)} chunks")
+    except Exception as e:
+        import traceback
+        _demo_error = traceback.format_exc()
+        raise
 
 
 @asynccontextmanager
@@ -130,6 +138,26 @@ class SessionInfo(BaseModel):
 @app.get("/health")
 def health():
     return {"ok": True}
+
+
+@app.get("/status")
+def status():
+    """Debug endpoint — hit this to see why the demo isn't working."""
+    import os
+    hf_cache = Path.home() / ".cache" / "huggingface" / "hub"
+    cached_models = [p.name for p in hf_cache.glob("models--*")] if hf_cache.exists() else []
+    return {
+        "demo_ready": _DEMO_ID in _sessions,
+        "demo_error": _demo_error,
+        "src_dir": str(_HERE),
+        "src_dir_exists": _HERE.exists(),
+        "web_dir": str(WEB_DIR),
+        "web_dir_exists": WEB_DIR.exists(),
+        "hf_cache": str(hf_cache),
+        "cached_models": cached_models,
+        "hf_home": os.environ.get("HF_HOME", "(not set)"),
+        "active_sessions": len(_sessions),
+    }
 
 
 @app.get("/")
