@@ -21,14 +21,16 @@ but I've started actually using it day-to-day so that's something.
 
 ## Installation
 
+It's not on PyPI (the name `codesearch` is taken there by a different project), so install it straight from GitHub:
+
 ```bash
-pip install codesearch
+pip install git+https://github.com/siwaarbn/codesearch
 ```
 
 Or if you're using uv (you should be):
 
 ```bash
-uv add codesearch
+uv tool install git+https://github.com/siwaarbn/codesearch
 ```
 
 ## Quick start
@@ -76,6 +78,19 @@ codesearch query "database connection pool" --top 10
 codesearch query "authentication middleware" --lang python
 codesearch query "onclick event handler" --lang javascript
 ```
+
+## Web interface
+
+There's also a small web UI (the screenshot at the top). Run it from a clone of the repo, because the `web/` folder isn't part of the installed package:
+
+```bash
+git clone https://github.com/siwaarbn/codesearch
+cd codesearch
+uv sync
+uv run codesearch-web
+```
+
+and open `http://localhost:8000`. You can drop in a zip of a codebase (up to 50 MB; only `.py`, `.js`, `.jsx` and `.mjs` files get indexed) or try the built-in demo, which searches a few functions from this repo. Uploaded indexes live in memory, so they're gone when the server restarts. The `Dockerfile` and `railway.toml` are there for deploying it on Railway.
 
 ## Example queries
 
